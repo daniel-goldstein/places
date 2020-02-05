@@ -3,6 +3,8 @@
 (require racket/place)
 (require "protocol.rkt")
 
+(module+ test (require rackunit))
+
 (provide
   collect
   create-distributed-range
@@ -53,12 +55,20 @@
 #; { (X) [Nat -> X] [List-of Place] -> [List-of X] }
 ;; Execute f on each worker and retrieve the results
 (define (distribute f workers)
-  (for/list ([worker-ch (in-list workers)])
-    (place-channel-put worker-ch f)
-    (place-channel-get worker-ch)))
+  (for ([worker-ch (in-list workers)])
+    (place-channel-put worker-ch f))
+  (map place-channel-get workers))
 
 
 #; { [List-of Place] -> Void }
 (define (shutdown workers)
   (for ([worker-ch (in-list workers)])
     (place-channel-put worker-ch SHUTDOWN)))
+
+(module+ test
+  (test-case "sum of squares"
+    (define sqr `(lambda (x) (* x x)))
+    (define nums (create-distributed-range 0 10))
+    (define squared-nums (distributed-map nums sqr))
+    (define sum (lambda (l) (foldl + 0 l)))
+    (check-equal? (collect sum squared-nums) 285)))
